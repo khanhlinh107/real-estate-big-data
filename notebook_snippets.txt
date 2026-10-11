@@ -1,0 +1,656 @@
+--- CELL 53 ---
+import pyspark
+
+print("PySpark version:", pyspark.__version__)
+
+--- CELL 54 ---
+from pyspark.sql import SparkSession
+
+# 1. Khởi động Spark
+spark = (
+    SparkSession.builder
+    .appName("RealEstateAnalysis")
+    .master("local[*]")
+    .getOrCreate()
+)
+
+# 2. Đọc dữ liệu sạch
+spark_df = (
+    spark.read
+    .option("header", True)
+    .option("inferSchema", True)
+    .option("encoding", "UTF-8")
+    .csv("../data/processed/real_estate_clean.csv")
+)
+
+# 3. Kiểm tra dữ liệu
+print("Số dòng:", spark_df.count())
+print("Số cột:", len(spark_df.columns))
+
+spark_df.show(5, truncate=False)
+
+--- CELL 55 ---
+import os
+
+os.environ["JAVA_HOME"] = r"C:\Program Files\Eclipse Adoptium\jdk-25.0.2.10-hotspot"
+
+from pyspark.sql import SparkSession
+
+spark = (
+    SparkSession.builder
+    .appName("RealEstateAnalysis")
+    .master("local[*]")
+    .getOrCreate()
+)
+
+print("Khởi động Spark thành công!")
+print("Spark version:", spark.version)
+
+--- CELL 57 ---
+
+from pyspark.sql import functions as F
+
+# 1. Thống kê tổng quan
+print("===== TỔNG QUAN DỮ LIỆU =====")
+print("Số dòng:", spark_df.count())
+print("Số cột:", len(spark_df.columns))
+
+# 2. Thống kê tất cả các cột số
+print("===== THỐNG KÊ CÁC CỘT SỐ =====")
+spark_df.select([
+    F.count(F.col(c)).alias(c + "_count")
+    for c, dtype in spark_df.dtypes
+    if dtype in ("int", "bigint", "double", "float", "smallint", "tinyint")
+]).show(truncate=False)
+
+numeric_cols = [
+    c for c, dtype in spark_df.dtypes
+    if dtype in ("int", "bigint", "double", "float", "smallint", "tinyint")
+]
+
+if numeric_cols:
+    spark_df.select([
+        F.round(F.min(c), 2).alias(c + "_min")
+        for c in numeric_cols
+    ] + [
+        F.round(F.avg(c), 2).alias(c + "_avg")
+        for c in numeric_cols
+    ] + [
+        F.round(F.max(c), 2).alias(c + "_max")
+        for c in numeric_cols
+    ]).show(truncate=False)
+
+# 3. Thống kê số giá trị khác nhau và số giá trị thiếu
+print("===== CHẤT LƯỢNG DỮ LIỆU =====")
+spark_df.select([
+    F.sum(F.col(c).isNull().cast("int")).alias(c + "_missing")
+    for c in spark_df.columns
+]).show(truncate=False)
+
+print("===== HOÀN TẤT =====")
+
+--- CELL 58 ---
+
+from pyspark.sql import functions as F
+
+# 1. Giá bất động sản theo quận
+print("===== GIÁ THEO QUẬN =====")
+
+spark_df.groupBy("district").agg(
+    F.count("*").alias("so_luong"),
+    F.round(F.avg("price"), 2).alias("gia_trung_binh"),
+    F.round(F.min("price"), 2).alias("gia_thap_nhat"),
+    F.round(F.max("price"), 2).alias("gia_cao_nhat")
+).orderBy(
+    F.desc("gia_trung_binh")
+).show(20, truncate=False)
+
+
+# 2. Giá theo loại bất động sản
+print("===== GIÁ THEO LOẠI BẤT ĐỘNG SẢN =====")
+
+spark_df.groupBy("type").agg(
+    F.count("*").alias("so_luong"),
+    F.round(F.avg("price"), 2).alias("gia_trung_binh")
+).orderBy(
+    F.desc("gia_trung_binh")
+).show(truncate=False)
+
+
+# 3. Mối quan hệ giữa diện tích và giá
+print("===== DIỆN TÍCH VÀ GIÁ =====")
+
+spark_df.select(
+    F.corr("area", "price").alias("tuong_quan_dien_tich_gia"),
+    F.round(F.avg("area"), 2).alias("dien_tich_trung_binh"),
+    F.round(F.avg("price"), 2).alias("gia_trung_binh")
+).show(truncate=False)
+
+
+# 4. Giá theo số phòng
+print("===== GIÁ THEO SỐ PHÒNG =====")
+
+spark_df.groupBy("rooms").agg(
+    F.count("*").alias("so_luong"),
+    F.round(F.avg("price"), 2).alias("gia_trung_binh")
+).orderBy("rooms").show(truncate=False)
+
+--- CELL 59 ---
+
+import os
+
+output_dir = "../data/output"
+os.makedirs(output_dir, exist_ok=True)
+
+results = {
+    "price_by_district": by_district,
+    "price_by_type": by_type,
+    "price_by_rooms": by_rooms,
+    "price_by_area": by_area
+}
+
+for name, result_df in results.items():
+    pandas_df = result_df.toPandas()
+    file_path = os.path.join(output_dir, f"{name}.csv")
+    pandas_df.to_csv(file_path, index=False, encoding="utf-8-sig")
+    print(f"Đã xuất: {file_path}")
+
+print("Hoàn tất xuất 4 bảng phân tích!")
+
+--- CELL 60 ---
+
+import os
+
+output_dir = "../data/output"
+
+files = [
+    "price_by_district.csv",
+    "price_by_type.csv",
+    "price_by_rooms.csv",
+    "price_by_area.csv"
+]
+
+for file in files:
+    path = os.path.join(output_dir, file)
+    if os.path.exists(path):
+        print(f"[OK] {file} — {os.path.getsize(path):,} bytes")
+    else:
+        print(f"[THIẾU] {file}")
+
+print("\nKiểm tra hoàn tất!")
+
+--- CELL 61 ---
+
+from pyspark.sql import functions as F
+
+# Chọn các cột dùng để dự đoán giá
+feature_cols = [
+    "area",
+    "rooms",
+    "year_built",
+    "total_floors",
+    "floor",
+    "lift",
+    "balkonies",
+    "loggia",
+    "cellar",
+    "district",
+    "type",
+    "construction_type",
+    "condition",
+    "orientation"
+]
+
+# Giữ các cột cần thiết và loại bản ghi thiếu dữ liệu
+model_df = spark_df.select(
+    ["price"] + feature_cols
+).dropna()
+
+print("Số dòng dùng để huấn luyện:", model_df.count())
+print("Số đặc trưng:", len(feature_cols))
+
+model_df.show(5, truncate=False)
+
+--- CELL 62 ---
+
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
+
+# Tự động nhận diện cột chữ và cột số
+categorical_cols = [
+    c for c, dtype in model_df.dtypes
+    if dtype == "string"
+]
+
+numeric_cols = [
+    c for c, dtype in model_df.dtypes
+    if c != "price" and dtype != "string"
+]
+
+print("Các cột chữ:", categorical_cols)
+print("Các cột số:", numeric_cols)
+
+# Chuyển cột chữ thành chỉ số số học
+indexers = [
+    StringIndexer(
+        inputCol=c,
+        outputCol=f"{c}_idx",
+        handleInvalid="keep"
+    )
+    for c in categorical_cols
+]
+
+# Chuyển chỉ số thành vector mã hóa
+encoder = OneHotEncoder(
+    inputCols=[f"{c}_idx" for c in categorical_cols],
+    outputCols=[f"{c}_vec" for c in categorical_cols],
+    handleInvalid="keep"
+)
+
+# Gộp các đặc trưng thành một vector
+assembler = VectorAssembler(
+    inputCols=numeric_cols + [f"{c}_vec" for c in categorical_cols],
+    outputCol="features",
+    handleInvalid="keep"
+)
+
+# Tạo pipeline xử lý
+stages = indexers + [encoder, assembler]
+pipeline = Pipeline(stages=stages)
+
+# Fit và biến đổi dữ liệu để kiểm tra
+pipeline_model = pipeline.fit(model_df)
+prepared_df = pipeline_model.transform(model_df)
+
+prepared_df.select("price", "features").show(5, truncate=False)
+
+print("Số dòng:", prepared_df.count())
+print("Đã mã hóa và tạo đặc trưng thành công!")
+
+--- CELL 63 ---
+
+from pyspark.ml.regression import RandomForestRegressor
+
+# 1. Chia dữ liệu: 80% huấn luyện, 20% kiểm tra
+train_df, test_df = prepared_df.randomSplit(
+    [0.8, 0.2],
+    seed=42
+)
+
+print("Số dòng huấn luyện:", train_df.count())
+print("Số dòng kiểm tra:", test_df.count())
+
+# 2. Tạo mô hình Random Forest
+rf = RandomForestRegressor(
+    featuresCol="features",
+    labelCol="price",
+    numTrees=50,
+    maxDepth=10,
+    seed=42
+)
+
+# 3. Huấn luyện mô hình
+rf_model = rf.fit(train_df)
+
+print("Huấn luyện mô hình thành công!")
+
+# 4. Dự đoán trên tập kiểm tra
+predictions = rf_model.transform(test_df)
+
+predictions.select(
+    "price",
+    "prediction"
+).show(10, truncate=False)
+
+--- CELL 64 ---
+
+from pyspark.ml.evaluation import RegressionEvaluator
+
+# Tính các chỉ số đánh giá
+metrics = {}
+
+for metric_name in ["mae", "rmse", "r2"]:
+    evaluator = RegressionEvaluator(
+        labelCol="price",
+        predictionCol="prediction",
+        metricName=metric_name
+    )
+    metrics[metric_name.upper()] = evaluator.evaluate(predictions)
+
+# Hiển thị kết quả
+print("===== KẾT QUẢ ĐÁNH GIÁ RANDOM FOREST =====")
+print(f"MAE  : {metrics['MAE']:,.2f}")
+print(f"RMSE : {metrics['RMSE']:,.2f}")
+print(f"R²   : {metrics['R2']:.4f}")
+
+--- CELL 65 ---
+
+from pyspark.ml import Pipeline
+from pyspark.ml.feature import StringIndexer, OneHotEncoder, VectorAssembler
+from pyspark.ml.regression import RandomForestRegressor
+from pyspark.ml.evaluation import RegressionEvaluator
+
+# 1. Chia dữ liệu TRƯỚC khi học cách mã hóa
+train_df, test_df = model_df.randomSplit([0.8, 0.2], seed=42)
+
+# 2. Tự động xác định các cột chữ và cột số
+categorical_cols = [
+    c for c, dtype in model_df.dtypes
+    if dtype == "string"
+]
+
+numeric_cols = [
+    c for c, dtype in model_df.dtypes
+    if c != "price" and dtype != "string"
+]
+
+# 3. Xây dựng quy trình mã hóa tự động
+indexers = [
+    StringIndexer(
+        inputCol=c,
+        outputCol=f"{c}_idx",
+        handleInvalid="keep"
+    )
+    for c in categorical_cols
+]
+
+encoder = OneHotEncoder(
+    inputCols=[f"{c}_idx" for c in categorical_cols],
+    outputCols=[f"{c}_vec" for c in categorical_cols],
+    handleInvalid="keep"
+)
+
+assembler = VectorAssembler(
+    inputCols=numeric_cols + [f"{c}_vec" for c in categorical_cols],
+    outputCol="features",
+    handleInvalid="keep"
+)
+
+# 4. Tạo mô hình Random Forest
+rf = RandomForestRegressor(
+    featuresCol="features",
+    labelCol="price",
+    numTrees=50,
+    maxDepth=10,
+    seed=42
+)
+
+pipeline = Pipeline(stages=indexers + [encoder, assembler, rf])
+
+# 5. Chỉ học từ tập train
+model = pipeline.fit(train_df)
+
+# 6. Dự đoán trên tập test
+predictions = model.transform(test_df)
+
+# 7. Đánh giá mô hình
+for metric in ["mae", "rmse", "r2"]:
+    evaluator = RegressionEvaluator(
+        labelCol="price",
+        predictionCol="prediction",
+        metricName=metric
+    )
+    print(f"{metric.upper()}: {evaluator.evaluate(predictions):,.4f}")
+
+--- CELL 66 ---
+
+from pyspark.ml.regression import DecisionTreeRegressor
+from pyspark.ml import Pipeline
+from pyspark.ml.evaluation import RegressionEvaluator
+
+# Tạo Decision Tree
+dt = DecisionTreeRegressor(
+    featuresCol="features",
+    labelCol="price",
+    maxDepth=10,
+    seed=42
+)
+
+# Tạo pipeline với cùng bước xử lý dữ liệu
+dt_pipeline = Pipeline(
+    stages=indexers + [encoder, assembler, dt]
+)
+
+# Huấn luyện trên cùng tập train
+dt_model = dt_pipeline.fit(train_df)
+
+# Dự đoán trên cùng tập test
+dt_predictions = dt_model.transform(test_df)
+
+# Đánh giá
+for metric in ["mae", "rmse", "r2"]:
+    evaluator = RegressionEvaluator(
+        labelCol="price",
+        predictionCol="prediction",
+        metricName=metric
+    )
+    value = evaluator.evaluate(dt_predictions)
+    print(f"Decision Tree - {metric.upper()}: {value:,.4f}")
+
+--- CELL 67 ---
+
+import joblib
+import os
+
+output_dir = "../data/output"
+os.makedirs(output_dir, exist_ok=True)
+
+# Lưu các chỉ số đánh giá
+metrics_result = {
+    "MAE": 35943.3443,
+    "RMSE": 70904.7106,
+    "R2": 0.6883
+}
+
+joblib.dump(
+    metrics_result,
+    os.path.join(output_dir, "random_forest_metrics.joblib")
+)
+
+print("Đã lưu các chỉ số đánh giá!")
+
+--- CELL 69 ---
+import pandas as pd
+import os
+
+comparison = pd.DataFrame([
+    {
+        "Model": "Random Forest",
+        "MAE": 35943.3443,
+        "RMSE": 70904.7106,
+        "R2": 0.6883
+    },
+    {
+        "Model": "Decision Tree",
+        "MAE": 41213.7207,
+        "RMSE": 108736.7502,
+        "R2": 0.2669
+    }
+])
+
+comparison = comparison.sort_values(by="R2", ascending=False)
+
+display(comparison)
+
+comparison.to_csv(
+    "../data/output/model_comparison.csv",
+    index=False,
+    encoding="utf-8-sig"
+)
+
+print("Đã lưu bảng so sánh mô hình!")
+
+--- CELL 70 ---
+import os
+import pandas as pd
+import matplotlib.pyplot as plt
+
+output_dir = "../data/output"
+os.makedirs(output_dir, exist_ok=True)
+
+# Đọc kết quả phân tích
+district_df = pd.read_csv(
+    os.path.join(output_dir, "price_by_district.csv")
+)
+type_df = pd.read_csv(
+    os.path.join(output_dir, "price_by_type.csv")
+)
+rooms_df = pd.read_csv(
+    os.path.join(output_dir, "price_by_rooms.csv")
+)
+area_df = pd.read_csv(
+    os.path.join(output_dir, "price_by_area.csv")
+)
+
+# 1. Top 10 khu vực có giá trung bình cao nhất
+top_districts = district_df.nlargest(10, "avg_price")
+
+plt.figure(figsize=(12, 6))
+plt.bar(top_districts["district"], top_districts["avg_price"])
+plt.title("Top 10 Districts by Average Property Price")
+plt.xlabel("District")
+plt.ylabel("Average Price")
+plt.xticks(rotation=45, ha="right")
+plt.tight_layout()
+plt.savefig(
+    os.path.join(output_dir, "price_by_district.png"),
+    dpi=150
+)
+plt.show()
+
+# 2. Giá trung bình theo loại căn hộ
+type_sorted = type_df.sort_values("avg_price", ascending=False)
+
+plt.figure(figsize=(12, 6))
+plt.bar(type_sorted["type"], type_sorted["avg_price"])
+plt.title("Average Property Price by Type")
+plt.xlabel("Property Type")
+plt.ylabel("Average Price")
+plt.xticks(rotation=45, ha="right")
+plt.tight_layout()
+plt.savefig(
+    os.path.join(output_dir, "price_by_type.png"),
+    dpi=150
+)
+plt.show()
+
+# 3. Giá trung bình theo số phòng
+rooms_sorted = rooms_df.sort_values("rooms")
+
+plt.figure(figsize=(8, 5))
+plt.bar(
+    rooms_sorted["rooms"].astype(str),
+    rooms_sorted["avg_price"]
+)
+plt.title("Average Property Price by Number of Rooms")
+plt.xlabel("Number of Rooms")
+plt.ylabel("Average Price")
+plt.tight_layout()
+plt.savefig(
+    os.path.join(output_dir, "price_by_rooms.png"),
+    dpi=150
+)
+plt.show()
+
+print("Đã tạo 3 biểu đồ trong thư mục data/output!")
+
+--- CELL 71 ---
+# Đọc dữ liệu đã làm sạch bằng PySpark
+spark_df = (
+    spark.read
+    .option("header", True)
+    .option("inferSchema", True)
+    .option("encoding", "UTF-8")
+    .csv("../data/processed/real_estate_clean.csv")
+)
+
+# Kiểm tra dữ liệu
+print("Số dòng:", spark_df.count())
+print("Số cột:", len(spark_df.columns))
+
+# Hiển thị 5 dòng đầu tiên
+spark_df.show(5, truncate=False)
+
+--- CELL 72 ---
+from pyspark.sql import functions as F
+
+by_district = (
+    spark_df
+    .groupBy("district")
+    .agg(
+        F.count("*").alias("count"),
+        F.avg("price").alias("avg_price"),
+        F.min("price").alias("min_price"),
+        F.max("price").alias("max_price")
+    )
+    .orderBy(F.desc("avg_price"))
+)
+
+by_district.show(10, truncate=False)
+
+--- CELL 73 ---
+from pyspark.sql import functions as F
+
+# 1. Giá theo khu vực
+by_district = (
+    spark_df.groupBy("district")
+    .agg(
+        F.count("*").alias("count"),
+        F.avg("price").alias("avg_price"),
+        F.min("price").alias("min_price"),
+        F.max("price").alias("max_price")
+    )
+    .orderBy(F.desc("avg_price"))
+)
+
+# 2. Giá theo loại bất động sản
+by_type = (
+    spark_df.groupBy("type")
+    .agg(
+        F.count("*").alias("count"),
+        F.avg("price").alias("avg_price")
+    )
+    .orderBy(F.desc("avg_price"))
+)
+
+# 3. Giá theo số phòng
+by_rooms = (
+    spark_df.groupBy("rooms")
+    .agg(
+        F.count("*").alias("count"),
+        F.avg("price").alias("avg_price")
+    )
+    .orderBy("rooms")
+)
+
+# 4. Giá theo nhóm diện tích
+by_area = (
+    spark_df.withColumn(
+        "area_group",
+        F.when(F.col("area") < 50, "Dưới 50")
+         .when(F.col("area") < 100, "50-99")
+         .when(F.col("area") < 150, "100-149")
+         .otherwise("Từ 150 trở lên")
+    )
+    .groupBy("area_group")
+    .agg(
+        F.count("*").alias("count"),
+        F.avg("price").alias("avg_price")
+    )
+)
+
+# Kiểm tra số nhóm và hiển thị kết quả
+print("Số khu vực:", by_district.count())
+print("Số loại bất động sản:", by_type.count())
+print("Số nhóm số phòng:", by_rooms.count())
+print("Số nhóm diện tích:", by_area.count())
+
+print("\nGiá theo loại bất động sản:")
+by_type.show(truncate=False)
+
+print("\nGiá theo số phòng:")
+by_rooms.show(truncate=False)
+
+print("\nGiá theo nhóm diện tích:")
+by_area.show(truncate=False)
+

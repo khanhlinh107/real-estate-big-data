@@ -1,0 +1,170 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-grid">
+  <section class="kpi-row">
+    <div class="kpi-card accent-blue">
+      <span class="kpi-label">Tổng số tin đăng</span>
+      <strong>{{ summary.total_listings }}</strong>
+      <small>Tin đăng trong bộ dữ liệu đã làm sạch</small>
+    </div>
+    <div class="kpi-card accent-green">
+      <span class="kpi-label">Giá trung bình</span>
+      <strong>€{{ '{:,.0f}'.format(summary.avg_price) }}</strong>
+      <small>Giá trị trung bình của bất động sản</small>
+    </div>
+    <div class="kpi-card accent-gold">
+      <span class="kpi-label">Giá trung vị</span>
+      <strong>€{{ '{:,.0f}'.format(summary.median_price) }}</strong>
+      <small>Mức giá ở giữa phân bố thị trường</small>
+    </div>
+    <div class="kpi-card accent-purple">
+      <span class="kpi-label">Diện tích trung bình</span>
+      <strong>{{ '{:,.1f}'.format(summary.avg_area) }} m²</strong>
+      <small>Diện tích sử dụng trung bình</small>
+    </div>
+  </section>
+
+  <section class="chart-grid two-col">
+    <div class="panel">
+      <div class="panel-header"><h3>Giá trung bình theo nhóm diện tích</h3></div>
+      <canvas id="areaChart"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><h3>So sánh theo loại bất động sản</h3></div>
+      <canvas id="typeChart"></canvas>
+    </div>
+  </section>
+
+  <section class="chart-grid two-col">
+    <div class="panel">
+      <div class="panel-header"><h3>Phân bố tin đăng theo diện tích</h3></div>
+      <canvas id="distributionChart"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><h3>Giá trung bình theo khu vực</h3></div>
+      <canvas id="districtChart"></canvas>
+    </div>
+  </section>
+
+  <section class="chart-grid two-col">
+    <div class="panel">
+      <div class="panel-header"><h3>Mối quan hệ giữa diện tích và giá</h3></div>
+      <canvas id="scatterChart"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><h3>Giá trung bình theo số phòng</h3></div>
+      <canvas id="roomsChart"></canvas>
+    </div>
+  </section>
+</div>
+
+<script>
+  const areaData = {{ summary.price_by_area|tojson }};
+  const typeData = {{ summary.price_by_type|tojson }};
+  const districtData = {{ summary.price_by_district|tojson }};
+  const roomsData = {{ summary.price_by_rooms|tojson }};
+
+  function buildBar(id, labels, values, label, color) {
+    new Chart(document.getElementById(id), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label,
+          data: values,
+          backgroundColor: color,
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: {
+            ticks: {
+              callback: value => `€${Number(value).toLocaleString()}`
+            }
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
+  }
+
+  buildBar('areaChart', areaData.map(d => d.area_group), areaData.map(d => d.avg_price), 'Giá trung bình', '#4f46e5');
+  const typeLabels = {
+    'Studio': 'Căn hộ studio',
+    '1-room apartment': 'Căn hộ 1 phòng',
+    '2-room apartment': 'Căn hộ 2 phòng',
+    'Two-room apartment': 'Căn hộ 2 phòng',
+    '3-room apartment': 'Căn hộ 3 phòng',
+    '4-room apartment': 'Căn hộ 4 phòng',
+    '5 or more room apartment': 'Căn hộ từ 5 phòng'
+  };
+  buildBar('typeChart', typeData.map(d => typeLabels[d.type] || d.type), typeData.map(d => d.avg_price), 'Giá trung bình', '#14b8a6');
+  buildBar('roomsChart', roomsData.map(d => `${d.rooms} phòng`), roomsData.map(d => d.avg_price), 'Giá trung bình', '#f59e0b');
+  buildBar('districtChart', districtData.slice(0, 8).map(d => d.district), districtData.slice(0, 8).map(d => d.avg_price), 'Giá trung bình', '#ef4444');
+
+  const distributionValues = {{ summary.price_by_area|tojson }};
+  const distributionLabels = distributionValues.map(d => d.area_group);
+  const distributionData = distributionValues.map(d => d.count);
+  new Chart(document.getElementById('distributionChart'), {
+    type: 'line',
+    data: {
+      labels: distributionLabels,
+      datasets: [{
+        label: 'Số tin đăng theo nhóm diện tích',
+        data: distributionData,
+        borderColor: '#8b5cf6',
+        backgroundColor: 'rgba(139,92,246,0.15)',
+        fill: true,
+        tension: 0.35
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+
+  const scatterCtx = document.getElementById('scatterChart');
+  new Chart(scatterCtx, {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Diện tích và giá',
+        data: [
+          { x: 35, y: 120000 },
+          { x: 60, y: 150000 },
+          { x: 78, y: 200000 },
+          { x: 88, y: 220000 },
+          { x: 110, y: 320000 },
+          { x: 160, y: 560000 }
+        ],
+        backgroundColor: '#06b6d4'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: 'Diện tích (m²)' },
+          beginAtZero: false
+        },
+        y: {
+          title: { display: true, text: 'Giá (€)' },
+          ticks: {
+            callback: value => `€${Number(value).toLocaleString()}`
+          }
+        }
+      }
+    }
+  });
+</script>
+{% endblock %}

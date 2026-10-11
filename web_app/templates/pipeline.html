@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-grid">
+  <section class="pipeline-wrapper">
+    {% for step in pipeline_steps %}
+    <div class="pipeline-step {% if step.status == 'Verified' %}verified{% elif step.status == 'Partial' %}partial{% elif step.status == 'Not verified' %}pending{% else %}active{% endif %}">
+      <div class="step-badge">{% if step.status == 'Verified' %}Đã xác minh{% elif step.status == 'Partial' %}Một phần{% elif step.status == 'Not verified' %}Chưa xác minh{% else %}Đang hoạt động{% endif %}</div>
+      <h3>{{ step.title }}</h3>
+      <p>{{ step.detail }}</p>
+    </div>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

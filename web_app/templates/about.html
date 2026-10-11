@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-grid">
+  <section class="panel about-panel">
+    <div class="panel-header"><h3>Mục tiêu dự án</h3></div>
+    <p>Dự án phân tích dữ liệu bất động sản nhằm tìm hiểu các yếu tố ảnh hưởng đến giá, so sánh các khu vực và xây dựng mô hình ước tính giá tự động. Bảng điều khiển trình bày kết quả phân tích dữ liệu và hỗ trợ tham khảo thị trường.</p>
+  </section>
+
+  <section class="panel about-panel">
+    <div class="panel-header"><h3>Nguồn và đặc điểm dữ liệu</h3></div>
+    <ul>
+      <li>Tệp dữ liệu gốc: <strong>data/raw/Real Estate Dataset.csv</strong></li>
+      <li>Tệp dữ liệu đã xử lý: <strong>data/processed/real_estate_clean.csv</strong></li>
+      <li>Số tin đăng đã xác minh: <strong>{{ summary.total_listings }}</strong></li>
+      <li>Các trường chính: <strong>giá, diện tích, số phòng, khu vực, loại hình, tình trạng và chỉ số chất lượng vị trí</strong></li>
+      <li>Dữ liệu gồm đặc điểm bất động sản và các điểm số về môi trường, an ninh, giao thông, tiện ích và không gian thư giãn.</li>
+    </ul>
+  </section>
+
+  <section class="panel about-panel">
+    <div class="panel-header"><h3>Phương pháp thực hiện</h3></div>
+    <p>Quy trình gồm nạp dữ liệu CSV, làm sạch và kiểm tra bằng pandas, phân tích bằng Spark, sau đó huấn luyện và đánh giá mô hình dự đoán giá. Bảng điều khiển sử dụng dữ liệu và kết quả có thật trong dự án.</p>
+  </section>
+
+  <section class="panel about-panel">
+    <div class="panel-header"><h3>Trạng thái mô hình học máy</h3></div>
+    <p>Mô hình Random Forest đã được huấn luyện và đang phục vụ chức năng dự đoán trực tiếp. Các chỉ số MAE, RMSE và R² được hiển thị tại trang Dự đoán giá để tham khảo chất lượng mô hình.</p>
+  </section>
+</div>
+{% endblock %}

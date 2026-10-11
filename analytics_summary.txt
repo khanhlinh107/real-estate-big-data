@@ -1,0 +1,34 @@
+FILE .\data\output\price_by_area.csv
+    area_group  count     avg_price
+       100-149    847 333652.050767
+       Dưới 50   3136 109008.816964
+         50-99  10730 158583.202889
+Từ 150 trở lên    256 567734.062500
+COLUMNS ['area_group', 'count', 'avg_price']
+
+FILE .\data\output\price_by_district.csv
+      district  count     avg_price  min_price  max_price
+  Bratislava I    649 418232.209553     128790    2358000
+Bratislava III    554 248156.245487      74900    1190000
+ Bratislava IV    737 229484.251018      80250    1234567
+ Bratislava II   1324 220203.400302      57000    1580000
+  Bratislava V    654 213529.122324      84990    1390000
+COLUMNS ['district', 'count', 'avg_price', 'min_price', 'max_price']
+
+FILE .\data\output\price_by_rooms.csv
+ rooms  count     avg_price
+     1   2193  98880.344733
+     2   5149 149044.018644
+     3   5991 169201.372893
+     4   1490 268186.197315
+     5    146 505736.417808
+COLUMNS ['rooms', 'count', 'avg_price']
+
+FILE .\data\output\price_by_type.csv
+                    type  count     avg_price
+5 or more room apartment    146 505736.417808
+        4-room apartment   1490 268186.197315
+        3-room apartment   5991 169201.372893
+        2-room apartment   5085 149460.977778
+      Two-room apartment     64 115915.312500
+COLUMNS ['type', 'count', 'avg_price']

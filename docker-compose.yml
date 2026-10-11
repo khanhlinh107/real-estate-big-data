@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: real-estate-intelligence
+    ports:
+      - "5000:7860"
+    environment:
+      POWERBI_EMBED_URL: ${POWERBI_EMBED_URL:-}
+    restart: unless-stopped

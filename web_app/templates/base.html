@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ project_name }} | {{ title or 'Bảng điều khiển' }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <div class="brand-mark">RE</div>
+          <div>
+            <h1>{{ project_name }}</h1>
+            <p>Phân tích dữ liệu bất động sản</p>
+          </div>
+        </div>
+
+        <nav class="nav">
+          <a href="{{ url_for('overview') }}" class="nav-item">Tổng quan</a>
+          <a href="{{ url_for('data_explorer') }}" class="nav-item">Khám phá dữ liệu</a>
+          <a href="{{ url_for('market_analytics') }}" class="nav-item">Phân tích thị trường</a>
+          <a href="{{ url_for('price_prediction') }}" class="nav-item">Dự đoán giá</a>
+          <a href="{{ url_for('pipeline') }}" class="nav-item">Quy trình dữ liệu</a>
+          <a href="{{ url_for('powerbi') }}" class="nav-item">Power BI</a>
+          <a href="{{ url_for('about') }}" class="nav-item">Giới thiệu</a>
+        </nav>
+
+        <div class="sidebar-card">
+          <span class="label">Dữ liệu</span>
+          <strong>{{ summary.total_listings if summary else 0 }}</strong>
+          <small>bất động sản</small>
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Trí tuệ Bất động sản</p>
+            <h2>{{ title or 'Tổng quan dự án' }}</h2>
+          </div>
+          <div class="status-pill"><span class="status-dot"></span> Dữ liệu đã tải</div>
+        </header>
+
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </body>
+</html>

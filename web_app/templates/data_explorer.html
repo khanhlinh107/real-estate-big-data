@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-grid compact">
+  <section class="panel">
+    <div class="panel-header search-header">
+      <h3>Danh sách bất động sản</h3>
+      <form method="get" class="search-form">
+        <input type="text" name="q" value="{{ query }}" placeholder="Tìm khu vực, loại hình, tình trạng..." />
+        <button type="submit">Tìm kiếm</button>
+        <a class="secondary-btn" href="{{ url_for('export_csv') }}?q={{ query|urlencode }}&sort={{ sort_col }}&dir={{ sort_dir }}">Tải CSV</a>
+      </form>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {% for field in columns[:8] %}
+              <th>
+                {% if field in ['price', 'area', 'rooms'] %}
+                  <a href="?q={{ query|urlencode }}&sort={{ field }}&dir={% if sort_col == field and sort_dir == 'asc' %}desc{% else %}asc{% endif %}&page=1">{{ column_labels.get(field, field|replace('_', ' ')|capitalize) }}</a>
+                {% else %}
+                  {{ column_labels.get(field, field|replace('_', ' ')|capitalize) }}
+                {% endif %}
+              </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in page_df.to_dict(orient='records') %}
+          <tr>
+            {% for field in columns[:8] %}
+              <td>{% if row[field] not in [None, 'nan'] %}{{ row[field]|data_value_vi(field) }}{% else %}—{% endif %}</td>
+            {% endfor %}
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="empty">Không tìm thấy dữ liệu phù hợp.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      <span>Đang hiển thị {{ page_df.shape[0] }} / {{ total_rows }} tin đăng</span>
+      {% if page > 1 %}
+        <a href="?q={{ query|urlencode }}&sort={{ sort_col }}&dir={{ sort_dir }}&page={{ page - 1 }}">Trước</a>
+      {% endif %}
+      <span>Trang {{ page }} / {{ pages }}</span>
+      {% if page < pages %}
+        <a href="?q={{ query|urlencode }}&sort={{ sort_col }}&dir={{ sort_dir }}&page={{ page + 1 }}">Sau</a>
+      {% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

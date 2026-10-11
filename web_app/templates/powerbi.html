@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-grid">
+  <section class="panel">
+    <div class="panel-header"><h3>Trạng thái bảng điều khiển Power BI</h3></div>
+    <div class="alert-box {% if pbix_exists %}info{% else %}warning{% endif %}">
+      {% if pbix_exists %}
+        Tệp bảng điều khiển Power BI bản máy tính có tại dashboard/Real_Estate_Dashboard.pbix. Tệp này không được tải lên máy chủ web; chưa thể nhúng trực tiếp vì chưa cấu hình URL Power BI hoặc phương thức nhúng an toàn.
+      {% else %}
+        Chưa cấu hình URL nhúng Power BI. Hãy thiết lập biến môi trường POWERBI_EMBED_URL bằng URL hợp lệ để hiển thị bảng điều khiển tại đây.
+      {% endif %}
+    </div>
+
+    {% if embed_url %}
+      <iframe src="{{ embed_url }}" title="Bảng điều khiển Power BI" class="powerbi-frame" allowfullscreen="true"></iframe>
+    {% else %}
+      <div class="powerbi-placeholder">
+        <h4>Hướng dẫn cấu hình</h4>
+        <ol>
+          <li>Xuất bản bảng điều khiển lên không gian làm việc Power BI.</li>
+          <li>Tạo URL nhúng hoặc mã thông báo nhúng an toàn.</li>
+          <li>Thiết lập biến môi trường POWERBI_EMBED_URL.</li>
+          <li>Khởi động lại ứng dụng để hiển thị bảng điều khiển tại đây.</li>
+        </ol>
+      </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

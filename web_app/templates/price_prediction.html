@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-grid">
+  <section class="panel form-panel">
+    <div class="panel-header"><h3>Thông tin bất động sản</h3></div>
+    <form class="prediction-form" id="prediction-form">
+      <div class="field-grid">
+        <label>
+          <span>Diện tích (m²)</span>
+          <input name="area" type="number" value="78" min="10" step="1" required />
+        </label>
+        <label>
+          <span>Số phòng</span>
+          <input name="rooms" type="number" value="2" min="1" step="1" required />
+        </label>
+        <label>
+          <span>Khu vực</span>
+          <select name="district" required>
+            {% for district in district_choices %}
+            <option value="{{ district }}" {% if loop.index0 == 0 %}selected{% endif %}>{{ district }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <span>Loại bất động sản</span>
+          <select name="type" required>
+            {% for property_type in type_choices %}
+            <option value="{{ property_type }}" {% if loop.index0 == 0 %}selected{% endif %}>{{ property_type|property_type_vi }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+      <div class="alert-box {% if model_ready %}info{% else %}warning{% endif %}">
+        {% if model_ready %}
+          Mô hình đã sẵn sàng. Hệ thống đang sử dụng mô hình Random Forest đã huấn luyện để dự đoán giá.
+        {% else %}
+          Chưa tìm thấy tệp mô hình đã huấn luyện. Hiện chưa thể dự đoán giá trực tiếp.
+        {% endif %}
+      </div>
+      <button type="submit" class="primary-button" {% if not model_ready %}disabled{% endif %}>Dự đoán giá</button>
+      <div id="prediction-result" class="result-box hidden"></div>
+    </form>
+  </section>
+
+  <section class="panel metrics-panel">
+    <div class="panel-header"><h3>Đánh giá mô hình</h3></div>
+    {% if model_metrics %}
+      <div class="metric-grid">
+        <div class="metric-box">
+          <span>MAE</span>
+          <strong>€{{ '{:,.0f}'.format(model_metrics['MAE'] or 0) }}</strong>
+        </div>
+        <div class="metric-box">
+          <span>RMSE</span>
+          <strong>€{{ '{:,.0f}'.format(model_metrics['RMSE'] or 0) }}</strong>
+        </div>
+        <div class="metric-box">
+          <span>R²</span>
+          <strong>{{ '{:.4f}'.format(model_metrics['R2'] or 0) }}</strong>
+        </div>
+      </div>
+    {% else %}
+      <div class="alert-box danger">Không tìm thấy tệp chỉ số đánh giá mô hình.</div>
+    {% endif %}
+    <p class="help-text">Mô hình sử dụng dữ liệu bất động sản đã làm sạch để ước tính giá dựa trên diện tích, số phòng, khu vực và loại bất động sản.</p>
+  </section>
+</div>
+
+<script>
+  const form = document.getElementById('prediction-form');
+  const resultBox = document.getElementById('prediction-result');
+
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    const payload = Object.fromEntries(new FormData(form).entries());
+
+    resultBox.classList.add('pending');
+    resultBox.textContent = 'Đang tính giá ước tính...';
+    resultBox.classList.remove('hidden');
+
+    try {
+      const response = await fetch('/api/predict', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.message || 'Không thể dự đoán giá.');
+      }
+
+      resultBox.classList.remove('pending');
+      resultBox.classList.add('success');
+      resultBox.innerHTML = '<strong>Giá ước tính:</strong> ' + data.formatted;
+    } catch (error) {
+      resultBox.classList.remove('pending');
+      resultBox.classList.add('error');
+      resultBox.textContent = error.message || 'Không thể tính giá ước tính.';
+    }
+  });
+</script>
+{% endblock %}

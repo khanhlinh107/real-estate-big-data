@@ -1,0 +1,10 @@
+name: real-estate-intelligence
+metadata:
+  template: real-estate-intelligence@0.0.1-beta
+services:
+  web:
+    project: .
+    host: appservice
+    language: python
+    docker:
+      path: ./Dockerfile

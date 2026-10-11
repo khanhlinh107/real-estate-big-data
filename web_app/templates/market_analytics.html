@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-grid">
+  <section class="chart-grid two-col">
+    <div class="panel">
+      <div class="panel-header"><h3>Giá theo khu vực</h3></div>
+      <canvas id="districtChart"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><h3>Giá trung bình theo loại bất động sản</h3></div>
+      <canvas id="typeChart"></canvas>
+    </div>
+  </section>
+
+  <section class="chart-grid two-col">
+    <div class="panel">
+      <div class="panel-header"><h3>Giá trung bình theo số phòng</h3></div>
+      <canvas id="roomsChart"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><h3>Phân bố theo nhóm diện tích</h3></div>
+      <canvas id="areaChart"></canvas>
+    </div>
+  </section>
+
+  <section class="panel table-panel">
+    <div class="panel-header"><h3>Thống kê tổng hợp theo khu vực</h3></div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Khu vực</th>
+            <th>Số tin</th>
+            <th>Giá trung bình</th>
+            <th>Giá thấp nhất</th>
+            <th>Giá cao nhất</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in summary.price_by_district[:10] %}
+          <tr>
+            <td>{{ row.district }}</td>
+            <td>{{ row.count }}</td>
+            <td>€{{ '{:,.0f}'.format(row.avg_price) }}</td>
+            <td>€{{ '{:,.0f}'.format(row.min_price) }}</td>
+            <td>€{{ '{:,.0f}'.format(row.max_price) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+  const districtData = {{ summary.price_by_district|tojson }};
+  const typeData = {{ summary.price_by_type|tojson }};
+  const roomsData = {{ summary.price_by_rooms|tojson }};
+  const areaData = {{ summary.price_by_area|tojson }};
+
+  new Chart(document.getElementById('districtChart'), {
+    type: 'bar',
+    data: {
+      labels: districtData.slice(0, 8).map(d => d.district),
+      datasets: [{ label: 'Giá trung bình', data: districtData.slice(0, 8).map(d => d.avg_price), backgroundColor: '#2563eb' }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+  });
+
+  new Chart(document.getElementById('typeChart'), {
+    type: 'doughnut',
+    data: {
+      labels: typeData.map(d => ({
+        'Studio': 'Căn hộ studio',
+        '1-room apartment': 'Căn hộ 1 phòng',
+        '2-room apartment': 'Căn hộ 2 phòng',
+        'Two-room apartment': 'Căn hộ 2 phòng',
+        '3-room apartment': 'Căn hộ 3 phòng',
+        '4-room apartment': 'Căn hộ 4 phòng',
+        '5 or more room apartment': 'Căn hộ từ 5 phòng'
+      })[d.type] || d.type),
+      datasets: [{ data: typeData.map(d => d.avg_price), backgroundColor: ['#22c55e', '#3b82f6', '#f59e0b', '#ef4444', '#a78bfa', '#14b8a6'] }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+  });
+
+  new Chart(document.getElementById('roomsChart'), {
+    type: 'line',
+    data: {
+      labels: roomsData.map(d => d.rooms),
+      datasets: [{ label: 'Giá trung bình', data: roomsData.map(d => d.avg_price), borderColor: '#f97316', fill: false, tension: 0.2 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false }
+  });
+
+  new Chart(document.getElementById('areaChart'), {
+    type: 'bar',
+    data: {
+      labels: areaData.map(d => d.area_group),
+      datasets: [{ label: 'Số tin đăng', data: areaData.map(d => d.count), backgroundColor: '#8b5cf6' }]
+    },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+  });
+</script>
+{% endblock %}
