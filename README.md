@@ -30,14 +30,31 @@ git push
 
 Thay `TEN_TAI_KHOAN` và `TEN_SPACE` bằng tên tài khoản và Space của bạn. Hugging Face sẽ tự build Docker image và cung cấp URL dạng `https://TEN_TAI_KHOAN-TEN_SPACE.hf.space`.
 
-## Chạy cục bộ
+## Chạy sau khi clone từ GitHub
+
+Cần cài Python 3.12. Mở PowerShell hoặc Terminal tại thư mục muốn lưu dự án, sau đó chạy:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-python .\web_app\app.py
+git clone https://github.com/khanhlinh107/real-estate-big-data.git
+cd real-estate-big-data
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe .\web_app\app.py
 ```
 
-Mở http://127.0.0.1:5000.
+Mở http://127.0.0.1:5000. Để lần sau khởi động nhanh hơn trên Windows, nhấp đúp `run_dashboard.bat`; tập lệnh sẽ tự tạo môi trường và cài thư viện nếu chưa có.
+
+Trên macOS/Linux, dùng các lệnh sau thay cho bước tạo môi trường và cài thư viện:
+
+```bash
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python web_app/app.py
+```
+
+Sau đó mở http://127.0.0.1:5000.
 
 ## Chạy bằng Docker
 
@@ -57,6 +74,10 @@ Sau đó mở http://127.0.0.1:5000.
 - Trang Power BI hỗ trợ URL nhúng qua biến môi trường `POWERBI_EMBED_URL`.
 
 Mô hình dự đoán được lưu tại `data/output/random_forest_model.joblib`; dữ liệu đã xử lý được lưu tại `data/processed/real_estate_clean.csv`.
+
+## Dữ liệu và quyền riêng tư
+
+Repository công khai có chứa dữ liệu bất động sản, dữ liệu đã xử lý và mô hình dự đoán. Người clone dự án sẽ tải được các tệp đó cùng mã nguồn. Không đưa mật khẩu, access token, tệp `.env` hoặc dữ liệu cá nhân vào repository.
 
 ## Thành phần được tải lên Space
 
