@@ -4,10 +4,15 @@
   <section class="panel">
     <div class="panel-header search-header">
       <h3>Danh sách bất động sản</h3>
-      <form method="get" class="search-form">
-        <input type="text" name="q" value="{{ query }}" placeholder="Tìm khu vực, loại hình, tình trạng..." />
+      <form method="get" class="search-form" id="data-search-form">
+        <div class="search-control">
+          <input id="data-search-input" type="search" name="q" value="{{ query }}" placeholder="Tìm khu vực, loại hình, tình trạng..." autocomplete="off" aria-autocomplete="list" aria-controls="search-suggestions" aria-expanded="false" />
+          <input id="search-field" type="hidden" name="field" value="{{ search_field }}" />
+          <button type="button" class="search-clear" aria-label="Xóa nội dung tìm kiếm" {% if not query %}hidden{% endif %}>×</button>
+          <div id="search-suggestions" class="suggestion-list" role="listbox" hidden></div>
+        </div>
         <button type="submit">Tìm kiếm</button>
-        <a class="secondary-btn" href="{{ url_for('export_csv') }}?q={{ query|urlencode }}&sort={{ sort_col }}&dir={{ sort_dir }}">Tải CSV</a>
+        <a class="secondary-btn" href="{{ url_for('export_csv') }}?q={{ query|urlencode }}&field={{ search_field|urlencode }}&sort={{ sort_col }}&dir={{ sort_dir }}">Tải CSV</a>
       </form>
     </div>
 
@@ -18,7 +23,7 @@
             {% for field in columns[:8] %}
               <th>
                 {% if field in ['price', 'area', 'rooms'] %}
-                  <a href="?q={{ query|urlencode }}&sort={{ field }}&dir={% if sort_col == field and sort_dir == 'asc' %}desc{% else %}asc{% endif %}&page=1">{{ column_labels.get(field, field|replace('_', ' ')|capitalize) }}</a>
+                  <a href="?q={{ query|urlencode }}&field={{ search_field|urlencode }}&sort={{ field }}&dir={% if sort_col == field and sort_dir == 'asc' %}desc{% else %}asc{% endif %}&page=1">{{ column_labels.get(field, field|replace('_', ' ')|capitalize) }}</a>
                 {% else %}
                   {{ column_labels.get(field, field|replace('_', ' ')|capitalize) }}
                 {% endif %}
@@ -34,7 +39,7 @@
             {% endfor %}
           </tr>
           {% else %}
-          <tr><td colspan="8" class="empty">Không tìm thấy dữ liệu phù hợp.</td></tr>
+          <tr><td colspan="8" class="empty">Không tìm thấy kết quả phù hợp</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -43,13 +48,119 @@
     <div class="pager">
       <span>Đang hiển thị {{ page_df.shape[0] }} / {{ total_rows }} tin đăng</span>
       {% if page > 1 %}
-        <a href="?q={{ query|urlencode }}&sort={{ sort_col }}&dir={{ sort_dir }}&page={{ page - 1 }}">Trước</a>
+        <a href="?q={{ query|urlencode }}&field={{ search_field|urlencode }}&sort={{ sort_col }}&dir={{ sort_dir }}&page={{ page - 1 }}">Trước</a>
       {% endif %}
       <span>Trang {{ page }} / {{ pages }}</span>
       {% if page < pages %}
-        <a href="?q={{ query|urlencode }}&sort={{ sort_col }}&dir={{ sort_dir }}&page={{ page + 1 }}">Sau</a>
+        <a href="?q={{ query|urlencode }}&field={{ search_field|urlencode }}&sort={{ sort_col }}&dir={{ sort_dir }}&page={{ page + 1 }}">Sau</a>
       {% endif %}
     </div>
   </section>
 </div>
+
+<script>
+  const searchForm = document.getElementById('data-search-form');
+  const searchInput = document.getElementById('data-search-input');
+  const searchField = document.getElementById('search-field');
+  const suggestionList = document.getElementById('search-suggestions');
+  const clearSearch = searchForm.querySelector('.search-clear');
+  let suggestionTimer;
+  let suggestionRequest;
+
+  function closeSuggestions() {
+    suggestionList.hidden = true;
+    suggestionList.replaceChildren();
+    searchInput.setAttribute('aria-expanded', 'false');
+  }
+
+  function showSuggestionMessage(message) {
+    suggestionList.replaceChildren();
+    const item = document.createElement('div');
+    item.className = 'suggestion-empty';
+    item.textContent = message;
+    suggestionList.append(item);
+    suggestionList.hidden = false;
+    searchInput.setAttribute('aria-expanded', 'true');
+  }
+
+  function renderSuggestions(suggestions) {
+    suggestionList.replaceChildren();
+    if (!suggestions.length) {
+      showSuggestionMessage('Không tìm thấy kết quả phù hợp');
+      return;
+    }
+
+    suggestions.forEach(suggestion => {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'suggestion-option';
+      option.setAttribute('role', 'option');
+      const value = document.createElement('span');
+      value.textContent = suggestion.value;
+      const metadata = document.createElement('small');
+      metadata.textContent = `${suggestion.field_label} · ${suggestion.count.toLocaleString('vi-VN')} tin`;
+      option.append(value, metadata);
+      option.addEventListener('click', () => {
+        searchInput.value = suggestion.value;
+        searchField.value = suggestion.field;
+        closeSuggestions();
+        searchForm.requestSubmit();
+      });
+      suggestionList.append(option);
+    });
+    suggestionList.hidden = false;
+    searchInput.setAttribute('aria-expanded', 'true');
+  }
+
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.trim();
+    clearSearch.hidden = !query;
+    searchField.value = '';
+    window.clearTimeout(suggestionTimer);
+    if (suggestionRequest) suggestionRequest.abort();
+    closeSuggestions();
+
+    if (!query) {
+      searchForm.requestSubmit();
+      return;
+    }
+
+    suggestionTimer = window.setTimeout(async () => {
+      suggestionRequest = new AbortController();
+      try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+          signal: suggestionRequest.signal,
+          headers: {'Accept': 'application/json'},
+        });
+        if (!response.ok) throw new Error('Search suggestions request failed');
+        const data = await response.json();
+        if (searchInput.value.trim() !== query) return;
+        renderSuggestions(data.suggestions || []);
+      } catch (error) {
+        if (error.name !== 'AbortError' && searchInput.value.trim() === query) {
+          showSuggestionMessage('Không thể tải gợi ý. Vui lòng thử lại.');
+        }
+      }
+    }, 180);
+  });
+
+  clearSearch.addEventListener('click', () => {
+    searchInput.value = '';
+    searchField.value = '';
+    searchInput.focus();
+    searchInput.dispatchEvent(new Event('input'));
+  });
+
+  searchForm.addEventListener('submit', () => {
+    closeSuggestions();
+  });
+
+  document.addEventListener('click', event => {
+    if (!searchForm.contains(event.target)) closeSuggestions();
+  });
+
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeSuggestions();
+  });
+</script>
 {% endblock %}

@@ -1,0 +1,246 @@
+{% extends 'base.html' %}
+{% macro metric_value(value, unit) -%}
+  {%- if value is none -%}
+    —
+  {%- elif unit == 'tin' -%}
+    {{ '{:,.0f}'.format(value) }} tin
+  {%- elif unit == 'm²' -%}
+    {{ '{:,.1f}'.format(value) }} m²
+  {%- elif unit == '€/m²' -%}
+    €{{ '{:,.2f}'.format(value) }}/m²
+  {%- else -%}
+    €{{ '{:,.0f}'.format(value) }}
+  {%- endif -%}
+{%- endmacro %}
+{% block content %}
+<div class="page-grid">
+  <section class="panel">
+    <div class="panel-header"><h3>Chọn hai khu vực cần so sánh</h3></div>
+    <form method="get" action="{{ url_for('area_comparison') }}" class="comparison-form">
+      <label>
+        <span>Khu vực A</span>
+        <select name="area_a" required>
+          <option value="">Chọn khu vực</option>
+          {% for district in districts %}
+          <option value="{{ district }}" {% if district == district_a %}selected{% endif %}>{{ district }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="button" class="swap-button secondary-btn" aria-label="Đổi vị trí hai khu vực" title="Đổi vị trí hai khu vực">⇄</button>
+      <label>
+        <span>Khu vực B</span>
+        <select name="area_b" required>
+          <option value="">Chọn khu vực</option>
+          {% for district in districts %}
+          <option value="{{ district }}" {% if district == district_b %}selected{% endif %}>{{ district }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button type="submit" class="primary-button">So sánh</button>
+    </form>
+    <p class="selection-error" role="alert" hidden>Vui lòng chọn hai khu vực khác nhau để so sánh.</p>
+    {% if error %}<div class="alert-box danger comparison-message">{{ error }}</div>{% endif %}
+  </section>
+
+  {% if comparison %}
+    {% set metrics = comparison.metrics %}
+    <section class="kpi-row comparison-kpis">
+      <div class="kpi-card accent-blue">
+        <span class="kpi-label">Số lượng tin đăng</span>
+        <strong>{{ '{:,.0f}'.format(metrics.listing_count.a) }} / {{ '{:,.0f}'.format(metrics.listing_count.b) }}</strong>
+        <small>{{ district_a }} / {{ district_b }}</small>
+      </div>
+      <div class="kpi-card accent-green">
+        <span class="kpi-label">Giá trung bình</span>
+        <strong>{{ metric_value(metrics.average_price.a, '€') }} / {{ metric_value(metrics.average_price.b, '€') }}</strong>
+        <small>{{ district_a }} / {{ district_b }}</small>
+      </div>
+      <div class="kpi-card accent-gold">
+        <span class="kpi-label">Giá trung vị</span>
+        <strong>{{ metric_value(metrics.median_price.a, '€') }} / {{ metric_value(metrics.median_price.b, '€') }}</strong>
+        <small>{{ district_a }} / {{ district_b }}</small>
+      </div>
+      <div class="kpi-card accent-purple">
+        <span class="kpi-label">Diện tích trung bình</span>
+        <strong>{{ metric_value(metrics.average_area.a, 'm²') }} / {{ metric_value(metrics.average_area.b, 'm²') }}</strong>
+        <small>{{ district_a }} / {{ district_b }}</small>
+      </div>
+    </section>
+
+    <section class="panel table-panel">
+      <div class="panel-header"><h3>Đối chiếu các chỉ số thị trường</h3></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Chỉ số</th><th>{{ district_a }}</th><th>{{ district_b }}</th><th>Chênh lệch tuyệt đối (B − A)</th><th>Chênh lệch (%)</th></tr>
+          </thead>
+          <tbody>
+            {% for label, key in [
+              ('Số lượng tin đăng', 'listing_count'),
+              ('Giá trung bình', 'average_price'),
+              ('Giá trung vị', 'median_price'),
+              ('Diện tích trung bình', 'average_area'),
+              ('Giá trung bình theo diện tích', 'average_price_per_area')
+            ] %}
+              {% set metric = metrics[key] %}
+              <tr>
+                <td>{{ label }}</td>
+                <td>{{ metric_value(metric.a, metric.unit) }}</td>
+                <td>{{ metric_value(metric.b, metric.unit) }}</td>
+                <td>{{ metric_value(metric.delta, metric.unit) if metric.delta is none else ('+' if metric.delta > 0 else '') ~ metric_value(metric.delta, metric.unit) }}</td>
+                <td>{% if metric.percentage is not none %}{{ '{:+,.1f}%'.format(metric.percentage) }}{% else %}—{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="help-text">Giá và diện tích chỉ tính trên các bản ghi có giá trị số dương; giá theo diện tích được tính trên từng tin đăng có đủ cả giá và diện tích. Tỷ lệ phần trăm không hiển thị khi mẫu số khu vực A bằng 0 hoặc thiếu dữ liệu.</p>
+    </section>
+
+    <section class="chart-grid two-col">
+      <div class="panel">
+        <div class="panel-header"><h3>Giá trung bình và giá trung vị</h3></div>
+        <canvas id="priceComparisonChart"></canvas>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3>Phân bố tin đăng theo khoảng giá</h3></div>
+        {% if comparison.has_price_distribution %}
+        <canvas id="priceDistributionChart"></canvas>
+        {% else %}
+        <p class="empty">Không đủ dữ liệu giá để lập phân bố.</p>
+        {% endif %}
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3>Số tin đăng theo loại bất động sản</h3></div>
+        {% if comparison.types %}
+        <canvas id="typeComparisonChart"></canvas>
+        {% else %}
+        <p class="empty">Không có dữ liệu loại bất động sản cho hai khu vực.</p>
+        {% endif %}
+      </div>
+      <div class="panel">
+        <div class="panel-header"><h3>Diện tích trung bình</h3></div>
+        <canvas id="areaComparisonChart"></canvas>
+      </div>
+    </section>
+
+    <section class="chart-grid two-col">
+      {% for label, key in [('Phân bố theo loại bất động sản', 'types'), ('Phân bố theo số phòng', 'rooms')] %}
+      <div class="panel table-panel">
+        <div class="panel-header"><h3>{{ label }}</h3></div>
+        {% if comparison[key] %}
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Nhóm</th><th>{{ district_a }}</th><th>{{ district_b }}</th><th>Chênh lệch (B − A)</th><th>Chênh lệch (%)</th></tr></thead>
+            <tbody>
+              {% for row in comparison[key] %}
+              {% set difference = row.b - row.a %}
+              <tr>
+                <td>{{ row.label|property_type_vi if key == 'types' else row.label ~ (' phòng' if row.label != 'nan' else '') }}</td>
+                <td>{{ '{:,.0f}'.format(row.a) }}</td>
+                <td>{{ '{:,.0f}'.format(row.b) }}</td>
+                <td>{{ '{:+,.0f}'.format(difference) }}</td>
+                <td>{% if row.a != 0 %}{{ '{:+,.1f}%'.format(difference / row.a * 100) }}{% else %}—{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="empty">Không có dữ liệu để so sánh.</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </section>
+
+    <script>
+      const comparison = {{ comparison|tojson }};
+      const districtA = {{ district_a|tojson }};
+      const districtB = {{ district_b|tojson }};
+      const currency = value => value == null ? 'Không có dữ liệu' : `€${Number(value).toLocaleString('vi-VN', {maximumFractionDigits: 0})}`;
+      const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { tooltip: { callbacks: { label: context => `${context.dataset.label}: ${currency(context.raw)}` } } },
+      };
+
+      new Chart(document.getElementById('priceComparisonChart'), {
+        type: 'bar',
+        data: {
+          labels: ['Giá trung bình', 'Giá trung vị'],
+          datasets: [
+            {label: districtA, data: [comparison.metrics.average_price.a, comparison.metrics.median_price.a], backgroundColor: '#2563eb', borderRadius: 6},
+            {label: districtB, data: [comparison.metrics.average_price.b, comparison.metrics.median_price.b], backgroundColor: '#14b8a6', borderRadius: 6},
+          ],
+        },
+        options: {...commonOptions, scales: {y: {beginAtZero: true, ticks: {callback: currency}}}},
+      });
+
+      const priceDistributionCanvas = document.getElementById('priceDistributionChart');
+      if (priceDistributionCanvas) {
+        new Chart(priceDistributionCanvas, {
+          type: 'bar',
+          data: {
+            labels: comparison.price_distribution.labels,
+            datasets: [
+              {label: districtA, data: comparison.price_distribution.a, backgroundColor: '#2563eb'},
+              {label: districtB, data: comparison.price_distribution.b, backgroundColor: '#14b8a6'},
+            ],
+          },
+          options: {...commonOptions, scales: {x: {title: {display: true, text: 'Khoảng giá (€)'}}, y: {beginAtZero: true, title: {display: true, text: 'Số tin đăng'}}}, plugins: {tooltip: {callbacks: {label: context => `${context.dataset.label}: ${context.raw.toLocaleString('vi-VN')} tin`}}}},
+        });
+      }
+
+      const typeComparisonCanvas = document.getElementById('typeComparisonChart');
+      if (typeComparisonCanvas) {
+        new Chart(typeComparisonCanvas, {
+          type: 'bar',
+          data: {
+            labels: comparison.types.map(item => item.label),
+            datasets: [
+              {label: districtA, data: comparison.types.map(item => item.a), backgroundColor: '#2563eb'},
+              {label: districtB, data: comparison.types.map(item => item.b), backgroundColor: '#14b8a6'},
+            ],
+          },
+          options: {...commonOptions, scales: {y: {beginAtZero: true, title: {display: true, text: 'Số tin đăng'}}}, plugins: {tooltip: {callbacks: {label: context => `${context.dataset.label}: ${context.raw.toLocaleString('vi-VN')} tin`}}}},
+        });
+      }
+
+      new Chart(document.getElementById('areaComparisonChart'), {
+        type: 'bar',
+        data: {
+          labels: [districtA, districtB],
+          datasets: [{label: 'Diện tích trung bình (m²)', data: [comparison.metrics.average_area.a, comparison.metrics.average_area.b], backgroundColor: ['#8b5cf6', '#f59e0b'], borderRadius: 6}],
+        },
+        options: {...commonOptions, scales: {y: {beginAtZero: true, title: {display: true, text: 'Diện tích (m²)'}}}, plugins: {tooltip: {callbacks: {label: context => `${context.dataset.label}: ${context.raw == null ? 'Không có dữ liệu' : `${Number(context.raw).toLocaleString('vi-VN', {maximumFractionDigits: 1})} m²`}`}}}},
+      });
+    </script>
+  {% else %}
+    <section class="panel comparison-intro">
+      <h3>So sánh dựa trên dữ liệu tin đăng đã làm sạch</h3>
+      <p>Chọn hai khu vực khác nhau để đối chiếu số lượng tin, giá, diện tích và cơ cấu bất động sản. Các chỉ số được tính trực tiếp từ từng bản ghi trong bộ dữ liệu đang dùng trên bảng điều khiển.</p>
+    </section>
+  {% endif %}
+</div>
+
+<script>
+  const comparisonForm = document.querySelector('.comparison-form');
+  const areaSelects = comparisonForm.querySelectorAll('select');
+  const selectionError = document.querySelector('.selection-error');
+  comparisonForm.addEventListener('submit', event => {
+    const sameArea = areaSelects[0].value && areaSelects[0].value === areaSelects[1].value;
+    if (sameArea) {
+      event.preventDefault();
+      selectionError.hidden = false;
+    }
+  });
+  areaSelects.forEach(select => select.addEventListener('change', () => {
+    selectionError.hidden = true;
+  }));
+  comparisonForm.querySelector('.swap-button').addEventListener('click', () => {
+    const firstValue = areaSelects[0].value;
+    areaSelects[0].value = areaSelects[1].value;
+    areaSelects[1].value = firstValue;
+  });
+</script>
+{% endblock %}

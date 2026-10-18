@@ -63,6 +63,7 @@
   const typeData = {{ summary.price_by_type|tojson }};
   const districtData = {{ summary.price_by_district|tojson }};
   const roomsData = {{ summary.price_by_rooms|tojson }};
+  const priceAreaPoints = {{ summary.price_area_points|tojson }};
 
   function buildBar(id, labels, values, label, color) {
     new Chart(document.getElementById(id), {
@@ -138,14 +139,7 @@
     data: {
       datasets: [{
         label: 'Diện tích và giá',
-        data: [
-          { x: 35, y: 120000 },
-          { x: 60, y: 150000 },
-          { x: 78, y: 200000 },
-          { x: 88, y: 220000 },
-          { x: 110, y: 320000 },
-          { x: 160, y: 560000 }
-        ],
+        data: priceAreaPoints.map(record => ({x: record.area, y: record.price})),
         backgroundColor: '#06b6d4'
       }]
     },

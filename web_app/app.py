@@ -1,6 +1,7 @@
-import json
-import os
+import re
+import unicodedata
 from functools import lru_cache
+from math import inf
 from pathlib import Path
 
 import joblib
@@ -19,8 +20,28 @@ PROCESSED_PATH = DATA_DIR / "processed" / "real_estate_clean.csv"
 OUTPUT_DIR = DATA_DIR / "output"
 MODEL_PATH = OUTPUT_DIR / "random_forest_model.joblib"
 MODEL_METRICS_PATH = OUTPUT_DIR / "random_forest_metrics.joblib"
-POWERBI_URL = os.getenv("POWERBI_EMBED_URL", "")
 PREDICTION_FEATURES = ["area", "rooms", "district", "type"]
+SEARCHABLE_COLUMNS = [
+    "name_nsi",
+    "price",
+    "area",
+    "rooms",
+    "district",
+    "type",
+    "condition",
+    "environment",
+]
+NUMERIC_SEARCHABLE_COLUMNS = {"price", "area", "rooms"}
+SEARCH_COLUMN_LABELS = {
+    "name_nsi": "Tên địa điểm",
+    "price": "Giá (€)",
+    "area": "Diện tích (m²)",
+    "rooms": "Số phòng",
+    "district": "Khu vực",
+    "type": "Loại bất động sản",
+    "condition": "Tình trạng",
+    "environment": "Môi trường",
+}
 PROPERTY_TYPE_LABELS = {
     "Studio": "Căn hộ studio",
     "1-room apartment": "Căn hộ 1 phòng",
@@ -80,12 +101,182 @@ def load_dataset():
     return pd.read_csv(PROCESSED_PATH, encoding="utf-8")
 
 
-def build_filter(df):
-    query = request.args.get("q", "").strip()
-    if query:
-        searchable = df.astype(str).apply(lambda col: col.str.contains(query, case=False, na=False)).fillna(False)
-        df = df[searchable.any(axis=1)]
+def normalize_search_text(value):
+    decomposed = unicodedata.normalize("NFKD", str(value).casefold().replace("đ", "d"))
+    without_diacritics = "".join(
+        character for character in decomposed if not unicodedata.combining(character)
+    )
+    return " ".join(without_diacritics.split())
+
+
+def _search_display_value(value, field):
+    if pd.isna(value):
+        return ""
+    return str(data_value_vi(value, field))
+
+
+def _numeric_query_variants(query):
+    normalized_query = normalize_search_text(query)
+    variants = {normalized_query}
+
+    if re.fullmatch(r"[+-]?\d{1,3}(?: \d{3})+", normalized_query):
+        variants.add(re.sub(r"\s", "", normalized_query))
+    elif "," in normalized_query and "." in normalized_query:
+        if normalized_query.rfind(",") > normalized_query.rfind("."):
+            variants.add(
+                re.sub(r"\.", "", normalized_query).replace(",", ".")
+            )
+        else:
+            variants.add(normalized_query.replace(",", ""))
+    elif "," in normalized_query:
+        if re.fullmatch(r"[+-]?\d{1,3}(?:,\d{3})+", normalized_query):
+            variants.add(normalized_query.replace(",", ""))
+        else:
+            variants.add(normalized_query.replace(",", "."))
+    elif re.fullmatch(r"[+-]?\d{1,3}(?:\.\d{3})+", normalized_query):
+        variants.add(normalized_query.replace(".", ""))
+
+    return variants
+
+
+def _matches_search_value(value, query, field):
+    normalized_value = normalize_search_text(_search_display_value(value, field))
+    normalized_query = normalize_search_text(query)
+    if normalized_query in normalized_value:
+        return True
+
+    if field in NUMERIC_SEARCHABLE_COLUMNS and re.fullmatch(r"[+-]?[\d\s.,]+", query):
+        return any(
+            variant in normalized_value
+            for variant in _numeric_query_variants(query)
+        )
+    return False
+
+
+def build_filter(df, query="", field=None):
+    normalized_query = normalize_search_text(query)
+    if not normalized_query:
+        return df
+
+    selected_column = (
+        field if field in SEARCHABLE_COLUMNS and field in df.columns else None
+    )
+    columns = [selected_column] if selected_column else [
+        column for column in SEARCHABLE_COLUMNS if column in df.columns
+    ]
+    matching_rows = pd.Series(False, index=df.index)
+    for column in columns:
+        matching_rows |= df[column].map(
+            lambda value: _matches_search_value(value, query, column)
+        )
+    df = df[matching_rows]
     return df
+
+
+def _numeric_values(series, positive_only=False):
+    values = pd.to_numeric(series, errors="coerce").replace([inf, -inf], float("nan")).dropna()
+    if positive_only:
+        values = values[values > 0]
+    return values
+
+
+def _comparison_metric(values_a, values_b, operation, unit):
+    value_a = operation(values_a) if not values_a.empty else None
+    value_b = operation(values_b) if not values_b.empty else None
+    delta = value_b - value_a if value_a is not None and value_b is not None else None
+    percentage = (
+        delta / value_a * 100
+        if delta is not None and value_a != 0
+        else None
+    )
+    return {
+        "a": float(value_a) if value_a is not None else None,
+        "b": float(value_b) if value_b is not None else None,
+        "delta": float(delta) if delta is not None else None,
+        "percentage": float(percentage) if percentage is not None else None,
+        "unit": unit,
+    }
+
+
+def build_area_comparison(df_a, df_b):
+    prices_a = _numeric_values(df_a["price"], positive_only=True)
+    prices_b = _numeric_values(df_b["price"], positive_only=True)
+    areas_a = _numeric_values(df_a["area"], positive_only=True)
+    areas_b = _numeric_values(df_b["area"], positive_only=True)
+
+    paired_a = (
+        df_a[["price", "area"]]
+        .apply(pd.to_numeric, errors="coerce")
+        .replace([inf, -inf], float("nan"))
+        .dropna()
+    )
+    paired_b = (
+        df_b[["price", "area"]]
+        .apply(pd.to_numeric, errors="coerce")
+        .replace([inf, -inf], float("nan"))
+        .dropna()
+    )
+    valid_a = paired_a.loc[(paired_a["price"] > 0) & (paired_a["area"] > 0)]
+    valid_b = paired_b.loc[(paired_b["price"] > 0) & (paired_b["area"] > 0)]
+    ratios_a = valid_a["price"] / valid_a["area"]
+    ratios_b = valid_b["price"] / valid_b["area"]
+
+    metrics = {
+        "listing_count": _comparison_metric(
+            pd.Series([len(df_a)]), pd.Series([len(df_b)]), lambda values: values.iloc[0], "tin"
+        ),
+        "average_price": _comparison_metric(prices_a, prices_b, lambda values: values.mean(), "€"),
+        "median_price": _comparison_metric(prices_a, prices_b, lambda values: values.median(), "€"),
+        "average_area": _comparison_metric(areas_a, areas_b, lambda values: values.mean(), "m²"),
+        "average_price_per_area": _comparison_metric(
+            ratios_a, ratios_b, lambda values: values.mean(), "€/m²"
+        ),
+    }
+
+    def category_counts(column):
+        if column not in df_a or column not in df_b:
+            return []
+        counts_a = df_a[column].dropna().astype(str).value_counts()
+        counts_b = df_b[column].dropna().astype(str).value_counts()
+        categories = sorted(set(counts_a.index) | set(counts_b.index), key=normalize_search_text)
+        return [
+            {
+                "label": category,
+                "a": int(counts_a.get(category, 0)),
+                "b": int(counts_b.get(category, 0)),
+            }
+            for category in categories
+        ]
+
+    type_counts = category_counts("type")
+    room_counts = category_counts("rooms")
+    distribution = {"labels": [], "a": [], "b": []}
+    combined_prices = pd.concat([prices_a, prices_b], ignore_index=True)
+    if not combined_prices.empty:
+        minimum = float(combined_prices.min())
+        maximum = float(combined_prices.max())
+        if minimum == maximum:
+            minimum = max(0.0, minimum - 0.5)
+            maximum += 0.5
+        bin_width = (maximum - minimum) / 10
+        edges = [minimum + bin_width * index for index in range(11)]
+        distribution["labels"] = [
+            f"€{edges[index]:,.0f}–€{edges[index + 1]:,.0f}" for index in range(10)
+        ]
+        for prices, output in ((prices_a, "a"), (prices_b, "b")):
+            buckets = [0] * 10
+            for price in prices:
+                bucket = min(int((float(price) - minimum) / bin_width), 9)
+                buckets[bucket] += 1
+            distribution[output] = buckets
+
+    return {
+        "metrics": metrics,
+        "types": type_counts,
+        "rooms": room_counts,
+        "price_distribution": distribution,
+        "has_price_distribution": not combined_prices.empty,
+    }
 
 
 def build_prediction_pipeline():
@@ -169,6 +360,10 @@ def get_dataset_snapshot():
     median_price = float(df["price"].median())
     total_listings = int(len(df))
     avg_area = float(df["area"].mean())
+    scatter_data = df[["area", "price"]].apply(pd.to_numeric, errors="coerce").dropna()
+    scatter_data = scatter_data[(scatter_data["area"] > 0) & (scatter_data["price"] > 0)]
+    if len(scatter_data) > 500:
+        scatter_data = scatter_data.sample(n=500, random_state=42)
     return {
         "total_listings": total_listings,
         "avg_price": avg_price,
@@ -180,6 +375,7 @@ def get_dataset_snapshot():
         "price_by_rooms": pd.read_csv(OUTPUT_DIR / "price_by_rooms.csv", encoding="utf-8").to_dict(orient="records"),
         "districts": sorted(df["district"].dropna().unique().tolist()),
         "property_types": sorted(df["type"].dropna().unique().tolist()),
+        "price_area_points": scatter_data.to_dict(orient="records"),
     }
 
 
@@ -201,7 +397,9 @@ def overview():
 
 @app.route("/data-explorer")
 def data_explorer():
-    df = build_filter(load_dataset())
+    query = request.args.get("q", "").strip()
+    search_field = request.args.get("field", "").strip()
+    df = build_filter(load_dataset(), query=query, field=search_field)
     sort_col = request.args.get("sort", "price")
     sort_dir = request.args.get("dir", "desc")
     if sort_col in df.columns:
@@ -221,7 +419,8 @@ def data_explorer():
         page=page,
         pages=pages,
         total_rows=total_rows,
-        query=request.args.get("q", ""),
+        query=query,
+        search_field=search_field,
         columns=[
             column
             for column in ["name_nsi", "price", "area", "rooms", "district", "type", "condition", "environment"]
@@ -261,6 +460,70 @@ def data_explorer():
     )
 
 
+@app.route("/api/search")
+def search_suggestions():
+    query = request.args.get("q", "").strip()
+    if not query:
+        return jsonify({"suggestions": []})
+
+    df = load_dataset()
+    suggestions = []
+    for column in SEARCHABLE_COLUMNS:
+        if column not in df.columns:
+            continue
+        values = df[column].dropna().map(
+            lambda value: _search_display_value(value, column)
+        ).value_counts()
+        for value, count in values.items():
+            if _matches_search_value(value, query, column):
+                suggestions.append({
+                    "value": value,
+                    "field": column,
+                    "field_label": SEARCH_COLUMN_LABELS[column],
+                    "count": int(count),
+                })
+
+    suggestions.sort(
+        key=lambda item: (
+            SEARCHABLE_COLUMNS.index(item["field"]),
+            normalize_search_text(item["value"]),
+        )
+    )
+    return jsonify({"suggestions": suggestions[:10]})
+
+
+@app.route("/area-comparison")
+def area_comparison():
+    districts = get_dataset_snapshot()["districts"]
+    district_a = request.args.get("area_a", "").strip()
+    district_b = request.args.get("area_b", "").strip()
+    comparison = None
+    error = None
+
+    if district_a or district_b:
+        if district_a not in districts or district_b not in districts:
+            error = "Vui lòng chọn hai khu vực có trong dữ liệu."
+        elif district_a == district_b:
+            error = "Vui lòng chọn hai khu vực khác nhau để so sánh."
+        else:
+            dataset = load_dataset()
+            comparison = build_area_comparison(
+                dataset[dataset["district"] == district_a],
+                dataset[dataset["district"] == district_b],
+            )
+
+    return render_template(
+        "area_comparison.html",
+        districts=districts,
+        district_a=district_a,
+        district_b=district_b,
+        comparison=comparison,
+        error=error,
+        summary=get_dataset_snapshot(),
+        title="So sánh thị trường bất động sản",
+    )
+
+
 @app.route("/market-analytics")
 def market_analytics():
     summary = get_dataset_snapshot()
@@ -283,7 +546,6 @@ def price_prediction():
         type_choices=type_choices,
         model_metrics=model_metrics,
         model_ready=model_ready,
-        powerbi_url=POWERBI_URL,
         title="Dự đoán giá",
     )
 
@@ -347,17 +609,6 @@ def pipeline():
     return render_template("pipeline.html", pipeline_steps=pipeline_steps, summary=get_dataset_snapshot(), title="Quy trình dữ liệu")
 
 
-@app.route("/powerbi")
-def powerbi():
-    return render_template(
-        "powerbi.html",
-        summary=get_dataset_snapshot(),
-        pbix_exists=(ROOT / "dashboard" / "Real_Estate_Dashboard.pbix").exists(),
-        embed_url=POWERBI_URL,
-        title="Power BI",
-    )
-
-
 @app.route("/about")
 def about():
     summary = get_dataset_snapshot()
@@ -366,7 +617,11 @@ def about():
 
 @app.route("/api/export")
 def export_csv():
-    df = build_filter(load_dataset())
+    df = build_filter(
+        load_dataset(),
+        query=request.args.get("q", "").strip(),
+        field=request.args.get("field", "").strip(),
+    )
     sort_col = request.args.get("sort", "price")
     sort_dir = request.args.get("dir", "desc")
     if sort_col in df.columns:
@@ -394,7 +649,7 @@ def overview_api():
 
 @app.context_processor
 def inject_common():
-    return {"project_name": "Trí tuệ Bất động sản", "app_year": 2026}
+    return {"project_name": "Bất động sản thông minh", "app_year": 2026}
 
 
 if __name__ == "__main__":

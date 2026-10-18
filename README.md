@@ -1,5 +1,5 @@
 ---
-title: Trí tuệ Bất động sản
+title: Bất động sản thông minh
 emoji: 🏠
 colorFrom: blue
 colorTo: indigo
@@ -8,7 +8,7 @@ app_port: 7860
 pinned: false
 ---
 
-# Trí tuệ Bất động sản
+# Bất động sản thông minh
 
 Bảng điều khiển phân tích dữ liệu bất động sản với chức năng tra cứu dữ liệu, phân tích thị trường và dự đoán giá bằng mô hình Random Forest đã huấn luyện.
 
@@ -68,10 +68,10 @@ Sau đó mở http://127.0.0.1:5000.
 ## Chức năng
 
 - Tổng quan số liệu và biểu đồ thị trường.
-- Tra cứu, sắp xếp, phân trang và xuất dữ liệu CSV.
+- Tra cứu có gợi ý theo từ khóa một phần, hỗ trợ tiếng Việt không dấu; sắp xếp, phân trang và xuất dữ liệu CSV.
+- So sánh hai khu vực dựa trên từng tin đăng trong bộ dữ liệu đã làm sạch.
 - Phân tích giá theo khu vực, loại bất động sản, số phòng và diện tích.
 - Dự đoán giá qua mô hình Random Forest và API `/api/predict`.
-- Trang Power BI hỗ trợ URL nhúng qua biến môi trường `POWERBI_EMBED_URL`.
 
 Mô hình dự đoán được lưu tại `data/output/random_forest_model.joblib`; dữ liệu đã xử lý được lưu tại `data/processed/real_estate_clean.csv`.
 
@@ -81,4 +81,4 @@ Repository công khai có chứa dữ liệu bất động sản, dữ liệu đ
 
 ## Thành phần được tải lên Space
 
-Chỉ tải lên các thành phần cần để chạy website: README, Dockerfile, requirements.txt, `web_app/` và `data/`. Không tải notebook, Power BI PBIX, dữ liệu thô hoặc tệp môi trường cá nhân lên Space.
+Chỉ tải lên các thành phần cần để chạy website: README, Dockerfile, requirements.txt, `web_app/` và `data/`. Không tải notebook, dữ liệu thô hoặc tệp môi trường cá nhân lên Space.

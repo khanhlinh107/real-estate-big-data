@@ -24,10 +24,10 @@
         <nav class="nav">
           <a href="{{ url_for('overview') }}" class="nav-item">Tổng quan</a>
           <a href="{{ url_for('data_explorer') }}" class="nav-item">Khám phá dữ liệu</a>
+          <a href="{{ url_for('area_comparison') }}" class="nav-item">So sánh khu vực</a>
           <a href="{{ url_for('market_analytics') }}" class="nav-item">Phân tích thị trường</a>
           <a href="{{ url_for('price_prediction') }}" class="nav-item">Dự đoán giá</a>
           <a href="{{ url_for('pipeline') }}" class="nav-item">Quy trình dữ liệu</a>
-          <a href="{{ url_for('powerbi') }}" class="nav-item">Power BI</a>
           <a href="{{ url_for('about') }}" class="nav-item">Giới thiệu</a>
         </nav>
 
@@ -41,7 +41,7 @@
       <main class="main-content">
         <header class="topbar">
           <div>
-            <p class="eyebrow">Trí tuệ Bất động sản</p>
+            <p class="eyebrow">Bất động sản thông minh</p>
             <h2>{{ title or 'Tổng quan dự án' }}</h2>
           </div>
           <div class="status-pill"><span class="status-dot"></span> Dữ liệu đã tải</div>
