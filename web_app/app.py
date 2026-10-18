@@ -1,7 +1,7 @@
 import re
 import unicodedata
 from functools import lru_cache
-from math import inf
+from math import inf, sqrt
 from pathlib import Path
 
 import joblib
@@ -315,7 +315,7 @@ def train_model_and_save(force_retrain=False):
 
     metrics = {
         "MAE": float(mean_absolute_error(y_test, predictions)),
-        "RMSE": float(mean_squared_error(y_test, predictions, squared=False)),
+        "RMSE": float(sqrt(mean_squared_error(y_test, predictions))),
         "R2": float(r2_score(y_test, predictions)),
     }
 
